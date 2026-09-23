@@ -44,7 +44,7 @@ back to a simple HTML → Markdown conversion for HTML-only mails.
 
 ```bash
 cd /path/to/kanboard/plugins
-git clone https://github.com/<you>/EmlBlock.git
+git clone https://github.com/redaxhu/EmlBlock.git
 ```
 
 The directory must be named `EmlBlock`. Restart PHP-FPM / the container if
