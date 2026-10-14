@@ -76,7 +76,43 @@ class MimePart
     public function text()
     {
         $cs = isset($this->params['charset']) ? $this->params['charset'] : '';
-        return str_replace("\r\n", "\n", self::toUtf8($this->content(), $cs));
+        $raw = $this->content();
+        $cte = strtolower(trim($this->header('content-transfer-encoding')));
+
+        // A raw 8-bit body pasted through the browser is already UTF-8, while the
+        // header still declares the original charset. Converting it again would
+        // double-encode it (é -> Ĺ), so repair it instead.
+        if (! in_array($cte, array('base64', 'quoted-printable'), true)
+            && self::isLegacyCharset($cs)
+            && preg_match('/[\x80-\xff]/', $raw)
+            && mb_check_encoding($raw, 'UTF-8')) {
+            return str_replace("\r\n", "\n", self::repairPasted($raw, $cs));
+        }
+
+        return str_replace("\r\n", "\n", self::toUtf8($raw, $cs));
+    }
+
+    private static function isLegacyCharset($cs)
+    {
+        $cs = strtolower(trim((string) $cs, " \t\"'"));
+        return ! in_array($cs, array('', 'utf-8', 'utf8', 'us-ascii', 'ascii'), true);
+    }
+
+    /**
+     * The copied text was usually shown by a viewer that decoded the original
+     * bytes as Latin-1 / Windows-1252 (latin2 "ő" F5 appears as "õ"). If every
+     * character fits back into that charset, recover the original bytes and
+     * decode them with the declared charset; otherwise keep the text as is.
+     */
+    private static function repairPasted($utf8, $cs)
+    {
+        foreach (array('ISO-8859-1', 'WINDOWS-1252') as $viewer) {
+            $bytes = @iconv('UTF-8', $viewer, $utf8);
+            if (is_string($bytes) && $bytes !== '') {
+                return self::toUtf8($bytes, $cs);
+            }
+        }
+        return $utf8;
     }
 
     public function filename()
